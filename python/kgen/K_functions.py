@@ -300,6 +300,36 @@ def fn_KF(p, TK, lnTK, S, sqrtS):
         p[1] + 
         p[2] * sqrtS
     )
+    
+def fn_KNH3(p, TK, lnTK, S, sqrtS):
+    """Calculate KNH3 from given parameters
+
+    Parameters
+    ----------
+    p : array-like
+        parameters for K calculation
+    TK : array-like
+        Temperature in Kelvin
+    lnTK : array-like
+        natural log of temperature in kelvin
+    S : arry-like
+        Salinity
+    sqrtS : array-like
+        square root of salinity
+
+    Returns
+    -------
+    array-like
+        KN on XXXXX pH scale.
+    """
+    return np.exp(
+        p[0] + p[1] * (1 / 298.15 - 1/TK) + 
+        (p[2] + p[3] * TK) / S**0.25 +
+        (p[4] + p[5] * TK**0.5 + p[6] * TK + p[7] / TK) / S**0.5 +
+        (p[8] + p[9] * TK**0.5 + p[10] * TK + p[11] / TK) * S**1.5 +
+        (p[12] + p[13] * TK**0.5 + p[14] / TK) * S**2 +
+        (p[15] + p[16] / TK) * S**2.5
+    )
 
 K_fns = {
     "K0": fn_K0,
@@ -314,7 +344,8 @@ K_fns = {
     "KP2": fn_KP,
     "KP3": fn_KP3,
     "KSi": fn_KSi,
-    "KF": fn_KF
+    "KF": fn_KF,
+    "KNH3": fn_KNH3,
 }    
 
 def prescorr(p, P, TC):
@@ -340,7 +371,7 @@ def prescorr(p, P, TC):
     dV = a0 + a1 * TC + a2 * TC ** 2
     dk = (b0 + b1 * TC)  # NB: there is a factor of 1000 in CO2sys, which has been incorporated into the coefficients for the function.    
     RT = 83.1451 * (TC + 273.15)
-    return np.exp((-dV + 0.5 * dk * P) * P / RT)    
+    return np.exp((-dV + 0.5 * dk * P) * P / RT)
 
 def calc_TS(Sal):
     """
