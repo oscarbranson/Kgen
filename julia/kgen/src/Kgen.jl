@@ -1,4 +1,6 @@
-module kgen
+module Kgen
+
+include("PyMYAMI.jl")
 
 using JSON
 
