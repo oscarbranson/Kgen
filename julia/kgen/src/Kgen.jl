@@ -9,6 +9,12 @@ project_path(parts...) = normpath(joinpath(@__DIR__, "..", parts...))
 K_coefs = JSON.parsefile(project_path("..", "coefficients", "K_calculation.json"))["coefficients"]
 K_presscorr_coefs = JSON.parsefile(project_path("..", "coefficients", "K_pressure_correction.json"))["coefficients"]
 
+function calc_Istr(Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}})
+    return (
+        19.924 .* Sal ./ (1000 .- 1.005 .* Sal)
+    )
+end
+
 function fn_K1K2(;
     p::Vector,
     TK::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}},
@@ -146,15 +152,13 @@ function fn_KS(;
     ...
     """
     
-    Istr = (
-        19.924 * S / (1000 - 1.005 * S)
-    )
+    Istr = calc_Istr(S)
     # Ionic strength after Dickson 1990a; see Dickson et al 2007
 
     exp.(
         p[1] .+
-        p[2] / TK .+
-        p[3] * lnTK .+
+        p[2] ./ TK .+
+        p[3] .* lnTK .+
         Istr .^ 0.5 .* (p[4] ./ TK .+ p[5] .+ p[6] .* lnTK) .+
         Istr .* (p[7] ./ TK .+ p[8] .+ p[9] .* lnTK) .+
         p[10] ./ TK .* Istr .* Istr .^ 0.5 .+
@@ -271,7 +275,7 @@ function fn_KSi(;
     ...
     """
 
-    Istr = 19.924 .* S ./ (1000 .- 1.005 .* S)
+    Istr = calc_Istr(S)
 
     exp.(
         p[1] ./ TK .+ 
@@ -326,6 +330,26 @@ K_fns = Dict(
     "KF" => fn_KF
 )
 
+function calc_TS(Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0)
+    """
+    Calculate total Sulphur in mol/kg-SW- lifted directly from CO2SYS.m
+
+    From Dickson et al., 2007, Table 2
+    Note: Sal / 1.80655 = Chlorinity
+    """
+    return 0.14 .* Sal ./ 1.80655 ./ 96.062 # mol/kg-SW
+end
+
+function calc_TF(Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0)
+    """
+    Calculate total Fluorine in mol/kg-SW
+
+    From Dickson et al., 2007, Table 2
+    Note: Sal / 1.80655 = Chlorinity
+    """
+    return 6.7e-5 .* Sal ./ 1.80655 ./ 18.9984 # mol/kg-SW
+end
+
 function prescorr(;
     p::Vector, 
     P::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}},
@@ -359,17 +383,40 @@ function calc_K(k::String;
     Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0,
     Pres::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0
     )
+
+    TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
+    Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
+    Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
+
+    max_length = maximum([length(TempC), length(Sal), length(Pres)])
+
+    TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
+    Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
+    Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
+
     TK = TempC .+ 273.15
     lnTK = log.(TK)
     sqrtS = Sal .^ 0.5
 
     K = K_fns[k](p=K_coefs[k], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
 
-    if Pres == 0
-        K
-    elseif haskey(K_presscorr_coefs, k)
-        prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) .* K
+    if any(Pres .> 0)
+        if haskey(K_presscorr_coefs, k)
+            TF = calc_TF(Sal)
+            TS = calc_TS(Sal)
+
+            KS_surf = K_fns["KS"](p=K_coefs["KS"], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
+            KS_deep = KS_surf .* prescorr(p=K_presscorr_coefs["KS"], P=Pres, TC=TempC)
+            KF_surf = K_fns["KF"](p=K_coefs["KF"], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
+            KF_deep = KF_surf .* prescorr(p=K_presscorr_coefs["KF"], P=Pres, TC=TempC)
+
+            tot_to_sws_surface = (1 .+ TS ./ KS_surf) ./ (1 .+ TS ./ KS_surf .+ TF ./ KF_surf)  # convert from TOT to SWS before pressure correction
+            sws_to_tot_deep = (1 .+ TS ./ KS_deep .+ TF ./ KF_deep) ./ (1 .+ TS ./ KS_deep)  # convert from SWS to TOT after pressure correction
+            
+            K .*= tot_to_sws_surface .* prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) .* sws_to_tot_deep
+        end
     end
+    return K
 
 end
 
@@ -379,6 +426,16 @@ function calc_Ks(;
     Pres::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=0.0
     )
 
+    TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
+    Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
+    Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
+
+    max_length = maximum([length(TempC), length(Sal), length(Pres)])
+
+    TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
+    Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
+    Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
+
     TK = TempC .+ 273.15
     lnTK = log.(TK)
     sqrtS = Sal .^ 0.5
@@ -387,14 +444,25 @@ function calc_Ks(;
     for (k, fn) in K_fns
         Ks[k] = fn(p=K_coefs[k], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
 
-        if Pres != 0
+        if any(Pres .> 0)
             if haskey(K_presscorr_coefs, k)
-                Ks[k] *= prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC)
+                TF = calc_TF(Sal)
+                TS = calc_TS(Sal)
+    
+                KS_surf = K_fns["KS"](p=K_coefs["KS"], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
+                KS_deep = KS_surf .* prescorr(p=K_presscorr_coefs["KS"], P=Pres, TC=TempC)
+                KF_surf = K_fns["KF"](p=K_coefs["KF"], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
+                KF_deep = KF_surf .* prescorr(p=K_presscorr_coefs["KF"], P=Pres, TC=TempC)
+    
+                tot_to_sws_surface = (1 .+ TS ./ KS_surf) ./ (1 .+ TS ./ KS_surf .+ TF ./ KF_surf)  # convert from TOT to SWS before pressure correction
+                sws_to_tot_deep = (1 .+ TS ./ KS_deep .+ TF ./ KF_deep) ./ (1 .+ TS ./ KS_deep)  # convert from SWS to TOT after pressure correction
+                
+                Ks[k] .*= tot_to_sws_surface .* prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) .* sws_to_tot_deep
             end
         end
     end
 
-    Ks
+    return Ks
 end
 
 export calc_K
