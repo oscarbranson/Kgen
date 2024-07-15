@@ -1,5 +1,7 @@
 module PyMYAMI
 
+export approximate_Fcorr
+
 using JSON
 
 project_path(parts...) = normpath(joinpath(@__DIR__, "..", parts...))
@@ -89,7 +91,7 @@ function generate_polynomial_features(
     return out
 end
 
-function approximate_Fcorr(
+function approximate_Fcorr(;
     TempC::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=25.0,
     Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0,
     Mg::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0528171,

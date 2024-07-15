@@ -381,18 +381,24 @@ end
 function calc_K(k::String;
     TempC::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=25.0,
     Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0,
-    Pres::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0
+    Pres::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0,
+    Mg::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0528171,
+    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821
     )
 
     TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
     Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
     Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
+    Mg = Mg isa AbstractArray ? Mg : fill(Mg, 1)
+    Ca = Ca isa AbstractArray ? Ca : fill(Ca, 1)
 
-    max_length = maximum([length(TempC), length(Sal), length(Pres)])
+    max_length = maximum([length(TempC), length(Sal), length(Pres), length(Mg), length(Ca)])
 
     TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
     Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
     Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
+    Mg = length(Mg) == max_length ? Mg : repeat(Mg, outer=ceil(Int, max_length / length(Mg)))
+    Ca = length(Ca) == max_length ? Ca : repeat(Ca, outer=ceil(Int, max_length / length(Ca)))
 
     TK = TempC .+ 273.15
     lnTK = log.(TK)
@@ -416,6 +422,14 @@ function calc_K(k::String;
             K .*= tot_to_sws_surface .* prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) .* sws_to_tot_deep
         end
     end
+
+    if any(Mg != 0.0528171) || any(Ca != 0.0102821)
+        Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+        if haskey(Fcorr, k)
+            K .*= Fcorr[k]
+        end
+    end
+
     return K
 
 end
@@ -423,18 +437,24 @@ end
 function calc_Ks(;
     TempC::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=25.0,
     Sal::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=35.0,
-    Pres::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=0.0
+    Pres::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=0.0,
+    Mg::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0528171,
+    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821
     )
 
     TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
     Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
     Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
+    Mg = Mg isa AbstractArray ? Mg : fill(Mg, 1)
+    Ca = Ca isa AbstractArray ? Ca : fill(Ca, 1)
 
-    max_length = maximum([length(TempC), length(Sal), length(Pres)])
+    max_length = maximum([length(TempC), length(Sal), length(Pres), length(Mg), length(Ca)])
 
     TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
     Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
     Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
+    Mg = length(Mg) == max_length ? Mg : repeat(Mg, outer=ceil(Int, max_length / length(Mg)))
+    Ca = length(Ca) == max_length ? Ca : repeat(Ca, outer=ceil(Int, max_length / length(Ca)))
 
     TK = TempC .+ 273.15
     lnTK = log.(TK)
@@ -459,6 +479,13 @@ function calc_Ks(;
                 
                 Ks[k] .*= tot_to_sws_surface .* prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) .* sws_to_tot_deep
             end
+        end
+    end
+
+    if any(Mg != 0.0528171) || any(Ca != 0.0102821)
+        Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+        for (k, v) in Fcorr
+            Ks[k] .*= v
         end
     end
 
