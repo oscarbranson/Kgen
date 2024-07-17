@@ -5,6 +5,8 @@
 
 # ignore temporary matlab files
 *.asv
+matlab/*.prj
+*.mltbx
 
 # ignore anything marked 'dev
 dev*
@@ -18,6 +20,11 @@ settings.json
 # R
 .Rhistory
 .Rprofile
+.Rproj.user
 
 # Darwin (MacOS)
 .DS_Store
+python/build/*
+
+# VSCode
+.vscode
