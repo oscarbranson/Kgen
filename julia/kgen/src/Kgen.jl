@@ -383,7 +383,8 @@ function calc_K(k::String;
     Sal::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=35.0,
     Pres::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0,
     Mg::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0528171,
-    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821
+    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821,
+    MyAMI_mode::String="approximate"
     )
 
     TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
@@ -423,10 +424,12 @@ function calc_K(k::String;
         end
     end
 
-    if any(Mg != 0.0528171) || any(Ca != 0.0102821)
-        Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
-        if haskey(Fcorr, k)
-            K .*= Fcorr[k]
+    if MyAMI_mode == "approximate"
+        if any(Mg != 0.0528171) || any(Ca != 0.0102821)
+            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+            if haskey(Fcorr, k)
+                K .*= Fcorr[k]
+            end
         end
     end
 
@@ -439,7 +442,8 @@ function calc_Ks(;
     Sal::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=35.0,
     Pres::Union{AbstractFloat, Integer,AbstractArray{<:AbstractFloat}}=0.0,
     Mg::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0528171,
-    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821
+    Ca::Union{AbstractFloat, Integer, AbstractArray{<:AbstractFloat}}=0.0102821,
+    MyAMI_mode::String="approximate"
     )
 
     TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
@@ -482,13 +486,15 @@ function calc_Ks(;
         end
     end
 
-    if any(Mg != 0.0528171) || any(Ca != 0.0102821)
-        Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
-        for (k, v) in Fcorr
-            Ks[k] .*= v
+    if MyAMI_mode == "approximate"
+        if any(Mg != 0.0528171) || any(Ca != 0.0102821)
+            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+            for (k, v) in Fcorr
+                Ks[k] .*= v
+            end
         end
     end
-
+    
     return Ks
 end
 
