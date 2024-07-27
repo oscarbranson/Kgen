@@ -412,10 +412,8 @@ function calc_K(k::String;
 
     if MyAMI_mode == "approximate"
         if any(Mg != 0.0528171) || any(Ca != 0.0102821)
-            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
-            if haskey(Fcorr, k)
-                K *= Fcorr[k]
-            end
+            Fcorr = PyMYAMI.approximate_Fcorr(K=k, TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+            K *= Fcorr
         end
     end
 
@@ -453,7 +451,7 @@ function calc_Ks(;
 
     if MyAMI_mode == "approximate"
         if (Mg != 0.0528171) || (Ca != 0.0102821)
-            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+            Fcorr = PyMYAMI.approximate_Fcorrs(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
             composition_correct = true
         else
             composition_correct = false
@@ -495,7 +493,5 @@ function calc_Ks(;
     
     return result
 end
-
-export calc_K
 
 end
