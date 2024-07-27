@@ -89,10 +89,13 @@ function approximate_Fcorr(;
     """
     Approximate the correction factor for the given input data.
     """
+    if !haskey(pymyami_coefs, K)
+        return 1.0
+    end
+
     X = generate_polynomial_features(TempC, Sal, Mg, Ca)
 
-    (X * pymyami_coefs[K])[1]
-    
+    return (X * pymyami_coefs[K])[1]
 end
 
 function approximate_Fcorrs(;
@@ -111,7 +114,6 @@ function approximate_Fcorrs(;
     end
 
     return Fcorr
-
 end
 
 end
