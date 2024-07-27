@@ -387,27 +387,13 @@ function calc_K(k::String;
     MyAMI_mode::String="approximate"
     )
 
-    TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
-    Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
-    Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
-    Mg = Mg isa AbstractArray ? Mg : fill(Mg, 1)
-    Ca = Ca isa AbstractArray ? Ca : fill(Ca, 1)
-
-    max_length = maximum([length(TempC), length(Sal), length(Pres), length(Mg), length(Ca)])
-
-    TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
-    Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
-    Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
-    Mg = length(Mg) == max_length ? Mg : repeat(Mg, outer=ceil(Int, max_length / length(Mg)))
-    Ca = length(Ca) == max_length ? Ca : repeat(Ca, outer=ceil(Int, max_length / length(Ca)))
-
     TK = TempC + 273.15
     lnTK = log(TK)
     sqrtS = Sal^0.5
 
     K = K_fns[k](p=K_coefs[k], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
 
-    if any(Pres .> 0)
+    if Pres > 0
         if haskey(K_presscorr_coefs, k)
             TF = calc_TF(Sal)
             TS = calc_TS(Sal)
@@ -437,6 +423,25 @@ function calc_K(k::String;
 
 end
 
+mutable struct Ks
+    K0::AbstractFloat
+    K1::AbstractFloat
+    K2::AbstractFloat
+    KW::AbstractFloat
+    KB::AbstractFloat
+    KS::AbstractFloat
+    KspA::AbstractFloat
+    KspC::AbstractFloat
+    KP1::AbstractFloat
+    KP2::AbstractFloat
+    KP3::AbstractFloat
+    KSi::AbstractFloat
+    KF::AbstractFloat
+
+    # default constructor
+    Ks() = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+end
+
 function calc_Ks(;
     TempC::AbstractFloat=25.0,
     Sal::AbstractFloat=35.0,
@@ -446,27 +451,22 @@ function calc_Ks(;
     MyAMI_mode::String="approximate"
     )
 
-    TempC = TempC isa AbstractArray ? TempC : fill(TempC, 1)
-    Sal = Sal isa AbstractArray ? Sal : fill(Sal, 1)
-    Pres = Pres isa AbstractArray ? Pres : fill(Pres, 1)
-    Mg = Mg isa AbstractArray ? Mg : fill(Mg, 1)
-    Ca = Ca isa AbstractArray ? Ca : fill(Ca, 1)
-
-    max_length = maximum([length(TempC), length(Sal), length(Pres), length(Mg), length(Ca)])
-
-    TempC = length(TempC) == max_length ? TempC : repeat(TempC, outer=ceil(Int, max_length / length(TempC)))
-    Sal = length(Sal) == max_length ? Sal : repeat(Sal, outer=ceil(Int, max_length / length(Sal)))
-    Pres = length(Pres) == max_length ? Pres : repeat(Pres, outer=ceil(Int, max_length / length(Pres)))
-    Mg = length(Mg) == max_length ? Mg : repeat(Mg, outer=ceil(Int, max_length / length(Mg)))
-    Ca = length(Ca) == max_length ? Ca : repeat(Ca, outer=ceil(Int, max_length / length(Ca)))
+    if MyAMI_mode == "approximate"
+        if (Mg != 0.0528171) || (Ca != 0.0102821)
+            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
+            composition_correct = true
+        else
+            composition_correct = false
+        end
+    end
 
     TK = TempC + 273.15
     lnTK = log(TK)
     sqrtS = Sal^0.5
 
-    Ks = Dict{String, AbstractFloat}()
+    result = Ks()
     for (k, fn) in K_fns
-        Ks[k] = fn(p=K_coefs[k], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
+        K_tmp = fn(p=K_coefs[k], TK=TK, lnTK=lnTK, S=Sal, sqrtS=sqrtS)
 
         if Pres > 0
             if haskey(K_presscorr_coefs, k)
@@ -481,24 +481,21 @@ function calc_Ks(;
                 tot_to_sws_surface = (1 + TS / KS_surf) / (1 + TS / KS_surf + TF / KF_surf)  # convert from TOT to SWS before pressure correction
                 sws_to_tot_deep = (1 + TS / KS_deep + TF / KF_deep) / (1 + TS / KS_deep)  # convert from SWS to TOT after pressure correction
                 
-                Ks[k] *= tot_to_sws_surface * prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) * sws_to_tot_deep
+                K_tmp *= tot_to_sws_surface * prescorr(p=K_presscorr_coefs[k], P=Pres, TC=TempC) * sws_to_tot_deep
             end
         end
-    end
+        if composition_correct
+            if haskey(Fcorr, k)
+                K_tmp *= Fcorr[k]
+            end
+        end
 
-    if MyAMI_mode == "approximate"
-        if (Mg != 0.0528171) || (Ca != 0.0102821)
-            Fcorr = PyMYAMI.approximate_Fcorr(TempC=TempC, Sal=Sal, Mg=Mg, Ca=Ca)
-            for (k, v) in Fcorr
-                Ks[k] *= v
-            end
-        end
+        setproperty!(result, Symbol(k), K_tmp)
     end
     
-    return Ks
+    return result
 end
 
 export calc_K
 
 end
-
