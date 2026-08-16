@@ -18,17 +18,21 @@ class crosscheck(unittest.TestCase):
     def test_polynomial_coefficients(self):
         with open('../r/inst/coefficients/polynomial_coefficients.json') as f:
             r_coefs = json.load(f)
-            
+
         with open('../matlab/polynomial_coefficients.json') as f:
             matlab_coefs = json.load(f)
-            
-        with self.subTest(msg=f'Checking MATLAB polynomial coefficients'):
-            for k, ref in pymyami.approximate.SEAWATER_CORRECTION_COEFS.items():
-                self.assertIsNone(np.testing.assert_equal(ref, matlab_coefs[k]), msg=f'\nMATLAB polynomial coefficients differ for {k}')
-        
-        with self.subTest(msg=f'Checking R polynomial coefficients'):
-            for k, ref in pymyami.approximate.SEAWATER_CORRECTION_COEFS.items():
-                self.assertIsNone(np.testing.assert_equal(ref, r_coefs[k]), msg=f'\nR polynomial coefficients differ for {k}')
+
+        with open('../julia/Kgen.jl/src/coefficients/polynomial_coefficients.json') as f:
+            julia_coefs = json.load(f)
+
+        # '_equation' is metadata describing the polynomial, not a coefficient array, so it is
+        # not carried in the files the other languages ship.
+        reference = {k: v for k, v in pymyami.approximate.SEAWATER_CORRECTION_COEFS.items() if k != '_equation'}
+
+        for lang, coefs in [('MATLAB', matlab_coefs), ('R', r_coefs), ('Julia', julia_coefs)]:
+            with self.subTest(msg=f'Checking {lang} polynomial coefficients'):
+                for k, ref in reference.items():
+                    self.assertIsNone(np.testing.assert_equal(ref, coefs[k]), msg=f'\n{lang} polynomial coefficients differ for {k}')
 
     def test_all(self):
         fs = glob('generated_Ks/*.csv')

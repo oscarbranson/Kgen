@@ -1,10 +1,13 @@
-.PHONY: test-python, build-python, upload-python, distribute-python, test-crosscheck, pymyami-update
+.PHONY: test-python, test-julia, build-python, upload-python, distribute-python, test-crosscheck, pymyami-update
 
 test-python:
 	cd python; python -m unittest
 
+test-julia:
+	julia --project=julia/Kgen.jl -e 'using Pkg; Pkg.test()'
+
 test-crosscheck:
-	cd crosscheck; python gen_python.py; Rscript gen_r.r; python -m unittest crosscheck.py; rm generated_Ks/*.csv
+	cd crosscheck; python gen_python.py; Rscript gen_r.r; julia gen_julia.jl; python -m unittest crosscheck.py; rm generated_Ks/*.csv
 
 pymyami-update:
 	python update_pymyami.py

@@ -1,5 +1,5 @@
 """
-Script that updates all resources and version numbers in Python, R and Matlab to ensure that they are in sync.
+Script that updates all resources and version numbers in Python, R, Matlab and Julia to ensure that they are in sync.
 """
 import urllib.request
 from glob import glob
@@ -58,6 +58,17 @@ with open('r/R/pymyami.R', 'r+') as f:
     f.seek(0)
     f.write(''.join(lines))
     f.truncate()
+
+###########################
+# Julia
+###########################
+
+# update polynomial_coefficients.json
+urllib.request.urlretrieve(polynomial_coefficient_path, "julia/Kgen.jl/src/coefficients/polynomial_coefficients.json")
+
+###########################
+# Github Actions
+###########################
 
 # update pymyami version in Github Actions
 

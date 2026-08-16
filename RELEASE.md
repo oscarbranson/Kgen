@@ -41,6 +41,11 @@ Should follow X.Y.Z, where X and Y are cross-platform major and minor releases, 
 - [ ] Update `Version` in `DESCRIPTION`
 - [ ] run `devtools::submit_cran()` (must be run by project maintainer only)
 
+### Julia
+
+- [ ] Update `version` in `julia/Kgen.jl/Project.toml`
+- [ ] Push a `Kgen.jl-vX.Y.Z` tag and comment `@JuliaRegistrator register subdir=julia/Kgen.jl` on the release commit
+
 ## When pymyami is updated 
 
 ### Python
@@ -55,3 +60,7 @@ Nothing to do - latest version is used by default.
 
 - [ ] Update pymyami version in `FILE PATH and LINE NUMBER`
 - [ ] Update `polynomial_coefficients` to match `pymyami/parameters/Fcorr_approx.json`
+
+### Julia
+
+- [ ] Run `update_pymyami.py`
