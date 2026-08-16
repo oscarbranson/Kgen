@@ -174,6 +174,23 @@ end
         @test !occursin("::Float64, ::Float64, ::Float64, ::Float64, ::Float64", err)
     end
 
+    @testset "mixed-type inputs pass through the MyAMI polynomial" begin
+        # Downstream packages differentiate through Kgen with ForwardDiff. Under AD the
+        # polynomial feature tuple is heterogeneous - the bias term stays a Float64 literal
+        # while the rest carry the Dual - so `_evaluate` must not demand an NTuple. BigFloat
+        # reproduces that shape exactly without taking a dependency on ForwardDiff.
+        features = Kgen.PyMYAMI.generate_polynomial_features(
+            big"25.0", big"35.0", big"0.0528171", big"0.0102821"
+        )
+        @test !(features isa NTuple{56,<:Real})
+        @test typeof(features[1]) === Float64
+        @test typeof(features[2]) === BigFloat
+
+        @test Float64(calc_K(:K1, big"25.0", big"35.0")) ≈ calc_K(:K1, 25.0, 35.0) rtol=1e-12
+        @test Float64(calc_Ks(big"25.0", big"35.0", big"300.0").K1) ≈
+              calc_Ks(25.0, 35.0, 300.0).K1 rtol=1e-12
+    end
+
     @testset "K_NAMES covers every coefficient set" begin
         coefficients = JSON.parsefile(
             joinpath(@__DIR__, "..", "src", "coefficients", "K_calculation.json")

@@ -34,7 +34,7 @@ end
 const POLY_COEFS = _load_polynomial_coefficients()
 
 """
-    generate_polynomial_features(temp_c, sal, magnesium, calcium) -> NTuple{56,Float64}
+    generate_polynomial_features(temp_c, sal, magnesium, calcium) -> 56-element Tuple
 
 Build the degree-3 polynomial feature vector in `(temp_k, log(temp_k), sal, magnesium,
 calcium)` that the pymyami coefficients were fitted against.
@@ -75,8 +75,13 @@ function generate_polynomial_features(temp_c::Real, sal::Real, magnesium::Real, 
 end
 
 "Dot product of the feature and coefficient tuples. `mapreduce` over tuples unrolls, so
-this compiles to a straight-line multiply-add chain with no intermediate allocation."
-_evaluate(features::NTuple{N_TERMS,Float64}, coefficients::NTuple{N_TERMS,Float64}) =
+this compiles to a straight-line multiply-add chain with no intermediate allocation.
+
+`features` is deliberately not `NTuple{N_TERMS,Float64}`: under automatic differentiation
+the feature tuple is heterogeneous — the bias term stays a `Float64` literal while the rest
+become `ForwardDiff.Dual` — so it matches no `NTuple`. Julia still specializes on the
+concrete all-`Float64` case, so this costs nothing in the common path."
+_evaluate(features::Tuple{Vararg{Real,N_TERMS}}, coefficients::NTuple{N_TERMS,Float64}) =
     mapreduce(*, +, features, coefficients)
 
 """
