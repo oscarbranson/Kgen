@@ -49,6 +49,41 @@ both.
 Crosscheck result with both sides on the same pymyami build: **max relative difference
 5.6e-10** across all 3125 conditions, ~180,000× inside tolerance.
 
+## Final review pass (2026-08-16)
+
+A critical read of the finished package found no defects in the numerics, but six issues in
+the layers around them — all introduced during this session. All fixed:
+
+1. **The module docstring's broadcasting example threw `TypeError`.** It still showed the
+   keyword form, which Julia cannot broadcast. `?Kgen` is the first thing a user reads.
+   The same error had been corrected in `calc_K`'s docstring and the README but missed here.
+2. **Every documented return value was stale.** All four figures in `calc_K`, `calc_Ks` and
+   the README predated the unconditional-MyAMI and gas-constant changes. One of them
+   (`[8.379e-7, 1.4213e-6]`) had been written by hand and was never correct at any point.
+   Now recomputed, and **pinned by a `values quoted in docstrings and README` testset** so
+   they cannot rot silently again — nothing executes the docstring examples themselves.
+3. **`K_NAMES` was cited in both public docstrings but not exported** (`UndefVarError`).
+   Now exported.
+4. **`MyAMI_mode` accepted only `Symbol`**, so `MyAMI_mode="approximate"` — what a Python
+   user writes — was a `TypeError`, inconsistent with `K` which takes both. Now takes both.
+5. **A mistyped keyword produced a baffling error** listing five phantom positional floats,
+   because the keyword forwarders used `kwargs...` and deferred the failure to the positional
+   method. Keywords are now listed out; the error reads
+   `no method matching calc_K(::Symbol; temp::Float64)`.
+6. **`_calc_surface_K` was a 13-deep chained ternary**, against the project's stated style.
+   Now `if`/`elseif`.
+
+Verified after the fixes: 0 bytes allocated, `calc_K` still infers `Float64`, broadcasting
+still dispatches to the positional method, `gen_julia.jl` still produces all 3125 rows.
+
+**Deliberately not changed**, flagged for a future decision:
+
+- `Pkg.test("Kgen")` fails for a user who installed the package, because `check_values/` is
+  shared with the other languages and lives outside it. The test errors with a clear
+  explanation. Fixing it means duplicating shared fixture data into `test/`.
+- No input validation: `calc_K(:K1, 25.0, -1.0)` returns a plausible `7.5e-7` from negative
+  salinity rather than erroring. Python behaves identically, so this is inherited, not new.
+
 ## Gas constant now read from fundamental_constants.json
 
 `coefficients/fundamental_constants.json` was not initially vendored, because nothing in the
