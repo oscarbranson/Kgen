@@ -23,20 +23,20 @@ Pkg.add(url="https://github.com/PalaeoCarb/Kgen", subdir="julia/Kgen.jl")
 using Kgen
 
 ks = calc_Ks(temp_c=25.0, sal=35.0, p_bar=300.0)
-ks.K1     # 1.8632444248743343e-6
+ks.K1     # 1.8632609342671508e-6
 ```
 
 `calc_K` returns a single constant:
 
 ```julia
-calc_K(:K1, temp_c=25.0, sal=35.0)          # 1.4212669153166358e-6
+calc_K(:K1, temp_c=25.0, sal=35.0)          # 1.421838978407675e-6
 calc_K("K1", temp_c=25.0, sal=35.0)         # strings work too
 ```
 
 Non-modern seawater composition, in mol/kgsw:
 
 ```julia
-calc_Ks(temp_c=25.0, sal=35.0, magnesium=0.03, calcium=0.02)
+calc_Ks(temp_c=25.0, sal=35.0, magnesium=0.03, calcium=0.02).K1   # 1.4222981352598759e-6
 ```
 
 ### Constants

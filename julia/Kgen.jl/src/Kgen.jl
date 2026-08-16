@@ -9,10 +9,14 @@ This is the Julia implementation of [Kgen](https://github.com/PalaeoCarb/Kgen); 
 numerically identical to the Python, R and MATLAB implementations by the cross-language
 test harness in `crosscheck/`.
 
-The core functions are scalar and allocation-free. To evaluate many conditions, broadcast:
+The core functions are scalar and allocation-free. Julia does not broadcast keyword
+arguments, so to evaluate many conditions pass them positionally and broadcast:
 
-```julia
-calc_K.(:K1, temp_c=[0.0, 10.0, 25.0], sal=35.0)
+```jldoctest
+julia> calc_K.(:K1, [0.0, 25.0], 35.0)
+2-element Vector{Float64}:
+ 7.671624005211631e-7
+ 1.421838978407675e-6
 ```
 """
 module Kgen
@@ -21,7 +25,7 @@ include("PyMYAMI.jl")
 
 using JSON
 
-export calc_K, calc_Ks
+export calc_K, calc_Ks, K_NAMES
 
 """
 Ks calculated by this package, in the order they are returned by [`calc_Ks`](@ref).
@@ -349,6 +353,8 @@ function _calc_surface_K(K::Symbol, temp_c::Real, sal::Real)
     throw(ArgumentError("$K is not a valid K. Should be one of $(K_NAMES)."))
 end
 
+_check_MyAMI_mode(MyAMI_mode::AbstractString) = _check_MyAMI_mode(Symbol(MyAMI_mode))
+
 function _check_MyAMI_mode(MyAMI_mode::Symbol)
     if MyAMI_mode === :approximate
         return nothing
@@ -382,23 +388,25 @@ conditions at once (see below).
 - `calcium`: *average* seawater calcium in mol/kgsw. Used to correct the Ks via MyAMI.
 
 # Keyword arguments
+`sulphate` and `fluorine` are only consulted when `p_bar` is non-zero.
+
 - `sulphate`: total sulphate in mol/kgsw. Calculated from `sal` if not given.
 - `fluorine`: total fluorine in mol/kgsw. Calculated from `sal` if not given.
-- `MyAMI_mode`: only `:approximate` is available in Julia; see [`PyMYAMI`](@ref).
+- `MyAMI_mode`: only `:approximate` is available in Julia; see `Kgen.PyMYAMI`.
 
 # Examples
-```julia
+```jldoctest
 julia> calc_K(:K1, temp_c=25.0, sal=35.0)
-1.4212669153166358e-6
+1.421838978407675e-6
 ```
 
 Broadcast over the positional form to evaluate many conditions at once:
 
-```julia
+```jldoctest
 julia> calc_K.(:K1, [0.0, 25.0], 35.0)
 2-element Vector{Float64}:
- 8.379e-7
- 1.4213e-6
+ 7.671624005211631e-7
+ 1.421838978407675e-6
 ```
 """
 function calc_K(K::Symbol,
@@ -409,7 +417,7 @@ function calc_K(K::Symbol,
                 calcium::Real=MODERN_CALCIUM;
                 sulphate::Union{Nothing,Real}=nothing,
                 fluorine::Union{Nothing,Real}=nothing,
-                MyAMI_mode::Symbol=:approximate)
+                MyAMI_mode::Union{Symbol,AbstractString}=:approximate)
     _check_MyAMI_mode(MyAMI_mode)
 
     result = _calc_surface_K(K, temp_c, sal)
@@ -435,14 +443,22 @@ function calc_K(K::Symbol,
     return result
 end
 
+# Convenience wrapper mirroring the Python/R/MATLAB keyword API. Broadcasting goes through
+# the positional method above, not this one - Julia cannot broadcast keyword arguments.
+# The keywords are listed out rather than forwarded as `kwargs...` so that a mistyped name is
+# reported against this method, instead of surfacing as a MethodError about phantom
+# positional arguments.
 function calc_K(K::Symbol;
                 temp_c::Real=25.0,
                 sal::Real=35.0,
                 p_bar::Real=0.0,
                 magnesium::Real=MODERN_MAGNESIUM,
                 calcium::Real=MODERN_CALCIUM,
-                kwargs...)
-    calc_K(K, temp_c, sal, p_bar, magnesium, calcium; kwargs...)
+                sulphate::Union{Nothing,Real}=nothing,
+                fluorine::Union{Nothing,Real}=nothing,
+                MyAMI_mode::Union{Symbol,AbstractString}=:approximate)
+    calc_K(K, temp_c, sal, p_bar, magnesium, calcium;
+           sulphate=sulphate, fluorine=fluorine, MyAMI_mode=MyAMI_mode)
 end
 
 calc_K(K::AbstractString, args::Real...; kwargs...) = calc_K(Symbol(K), args...; kwargs...)
@@ -458,11 +474,14 @@ Calculate all 13 stoichiometric equilibrium constants on the total pH scale, ret
 Arguments are as for [`calc_K`](@ref).
 
 # Examples
-```julia
+```jldoctest
 julia> ks = calc_Ks(temp_c=25.0, sal=35.0);
 
 julia> ks.K1
-1.4212669153166358e-6
+1.421838978407675e-6
+
+julia> calc_Ks(temp_c=25.0, sal=35.0, p_bar=300.0).K1
+1.8632609342671508e-6
 ```
 
 Broadcasting the positional form gives one `NamedTuple` per condition, which can be passed
@@ -479,7 +498,7 @@ function calc_Ks(temp_c::Real,
                  calcium::Real=MODERN_CALCIUM;
                  sulphate::Union{Nothing,Real}=nothing,
                  fluorine::Union{Nothing,Real}=nothing,
-                 MyAMI_mode::Symbol=:approximate)
+                 MyAMI_mode::Union{Symbol,AbstractString}=:approximate)
     _check_MyAMI_mode(MyAMI_mode)
 
     ks = (
@@ -537,13 +556,18 @@ function calc_Ks(temp_c::Real,
     return ks
 end
 
+# See the note on the equivalent calc_K method: broadcasting uses the positional form, and
+# the keywords are listed out so a mistyped name is reported clearly.
 function calc_Ks(; temp_c::Real=25.0,
                    sal::Real=35.0,
                    p_bar::Real=0.0,
                    magnesium::Real=MODERN_MAGNESIUM,
                    calcium::Real=MODERN_CALCIUM,
-                   kwargs...)
-    calc_Ks(temp_c, sal, p_bar, magnesium, calcium; kwargs...)
+                   sulphate::Union{Nothing,Real}=nothing,
+                   fluorine::Union{Nothing,Real}=nothing,
+                   MyAMI_mode::Union{Symbol,AbstractString}=:approximate)
+    calc_Ks(temp_c, sal, p_bar, magnesium, calcium;
+            sulphate=sulphate, fluorine=fluorine, MyAMI_mode=MyAMI_mode)
 end
 
 end # module

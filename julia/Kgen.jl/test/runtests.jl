@@ -145,6 +145,35 @@ end
         @test all_ks[end].K1 == calc_K(:K1, 25.0, 35.0)
     end
 
+    @testset "values quoted in docstrings and README" begin
+        # These are the exact figures written into the module docstring, calc_K, calc_Ks and
+        # the README. Nothing executes those examples, so pin them here - they went stale
+        # once already when the gas constant and the MyAMI gating changed.
+        @test calc_K(:K1, temp_c=25.0, sal=35.0) === 1.421838978407675e-6
+        @test calc_Ks(temp_c=25.0, sal=35.0).K1 === 1.421838978407675e-6
+        @test calc_Ks(temp_c=25.0, sal=35.0, p_bar=300.0).K1 === 1.8632609342671508e-6
+        @test calc_Ks(temp_c=25.0, sal=35.0, magnesium=0.03, calcium=0.02).K1 ===
+              1.4222981352598759e-6
+        @test calc_K.(:K1, [0.0, 25.0], 35.0) ==
+              [7.671624005211631e-7, 1.421838978407675e-6]
+    end
+
+    @testset "public API is reachable" begin
+        # K_NAMES is referenced by both public docstrings, so it must be exported.
+        @test K_NAMES === Kgen.K_NAMES
+
+        # MyAMI_mode should accept a String as well as a Symbol, as K does - Python users
+        # will reach for the string form.
+        @test calc_K(:K1, MyAMI_mode="approximate") == calc_K(:K1, MyAMI_mode=:approximate)
+        @test_throws ArgumentError calc_K(:K1, MyAMI_mode="calculate")
+        @test_throws ArgumentError calc_K(:K1, MyAMI_mode="nonsense")
+
+        # A mistyped keyword should complain about the keyword, not about phantom positionals.
+        err = try; calc_K(:K1, temp=25.0); catch e; sprint(showerror, e); end
+        @test occursin("temp", err)
+        @test !occursin("::Float64, ::Float64, ::Float64, ::Float64, ::Float64", err)
+    end
+
     @testset "K_NAMES covers every coefficient set" begin
         coefficients = JSON.parsefile(
             joinpath(@__DIR__, "..", "src", "coefficients", "K_calculation.json")
